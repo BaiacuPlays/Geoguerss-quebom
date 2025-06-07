@@ -1,5 +1,11 @@
+// Importar configuração
+import { config, debug } from './config.js';
+
 // Conexão Socket.io
-const socket = io('http://localhost:3004');
+const socket = io(config.getSocketUrl(), config.socketConfig);
+
+debug.log('🔌 Conectando ao servidor:', config.getSocketUrl());
+debug.log('🌍 Ambiente:', config.isProduction() ? 'Produção' : 'Desenvolvimento');
 
 // Estado do lobby
 let lobbyState = {
@@ -67,14 +73,40 @@ elements.roomCode.addEventListener('input', (e) => {
 
 // Socket Events
 socket.on('connect', () => {
-    console.log('🔌 Conectado ao servidor');
+    debug.log('🔌 Conectado ao servidor');
     updateConnectionStatus(true);
+    clearMessages();
 });
 
-socket.on('disconnect', () => {
-    console.log('🔌 Desconectado do servidor');
+socket.on('disconnect', (reason) => {
+    debug.log('🔌 Desconectado do servidor:', reason);
     updateConnectionStatus(false);
-    showError('Conexão perdida com o servidor!');
+
+    // Mostrar mensagem apenas se não foi desconexão intencional
+    if (reason !== 'io client disconnect') {
+        showError('Conexão perdida com o servidor! Tentando reconectar...');
+    }
+});
+
+socket.on('connect_error', (error) => {
+    debug.error('❌ Erro de conexão:', error);
+    updateConnectionStatus(false);
+    showError('Erro ao conectar com o servidor. Verifique sua conexão.');
+});
+
+socket.on('reconnect', (attemptNumber) => {
+    debug.log('🔄 Reconectado após', attemptNumber, 'tentativas');
+    updateConnectionStatus(true);
+    showSuccess('Reconectado ao servidor!');
+});
+
+socket.on('reconnect_error', (error) => {
+    debug.error('❌ Erro de reconexão:', error);
+});
+
+socket.on('reconnect_failed', () => {
+    debug.error('❌ Falha na reconexão');
+    showError('Não foi possível reconectar ao servidor.');
 });
 
 socket.on('room-created', (data) => {

@@ -1,3 +1,6 @@
+// Importar configuração
+import { config, debug } from './config.js';
+
 // Sistema Multiplayer para GeoGuessr
 class MultiplayerManager {
     constructor() {
@@ -49,17 +52,47 @@ class MultiplayerManager {
             return;
         }
 
-        console.log('🔌 Conectando ao servidor multiplayer...');
-        this.socket = io('http://localhost:3004');
+        debug.log('🔌 Conectando ao servidor multiplayer...');
+        debug.log('🌍 URL do servidor:', config.getSocketUrl());
+
+        this.socket = io(config.getSocketUrl(), {
+            ...config.socketConfig,
+            forceNew: true
+        });
 
         this.socket.on('connect', () => {
-            console.log('✅ Conectado ao servidor multiplayer');
+            debug.log('✅ Conectado ao servidor multiplayer');
             this.rejoinRoom();
         });
 
-        this.socket.on('disconnect', () => {
-            console.log('❌ Desconectado do servidor');
-            this.showMultiplayerMessage('Conexão perdida com o servidor!', 'error');
+        this.socket.on('disconnect', (reason) => {
+            debug.log('❌ Desconectado do servidor:', reason);
+            if (reason !== 'io client disconnect') {
+                this.showMultiplayerMessage('Conexão perdida! Tentando reconectar...', 'error');
+            }
+        });
+
+        this.socket.on('connect_error', (error) => {
+            debug.error('❌ Erro de conexão multiplayer:', error);
+            this.showMultiplayerMessage('Erro de conexão com o servidor!', 'error');
+        });
+
+        this.socket.on('reconnect', (attemptNumber) => {
+            debug.log('🔄 Reconectado ao multiplayer após', attemptNumber, 'tentativas');
+            this.showMultiplayerMessage('Reconectado ao servidor!', 'success');
+        });
+
+        this.socket.on('reconnect_error', (error) => {
+            debug.error('❌ Erro de reconexão multiplayer:', error);
+        });
+
+        this.socket.on('reconnect_failed', () => {
+            debug.error('❌ Falha na reconexão multiplayer');
+            this.showMultiplayerMessage('Não foi possível reconectar. Voltando ao lobby...', 'error');
+            setTimeout(() => {
+                this.clearMultiplayerData();
+                window.location.href = 'lobby.html';
+            }, 3000);
         });
 
         this.socket.on('round-started', (data) => {

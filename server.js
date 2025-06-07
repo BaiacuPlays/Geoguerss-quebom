@@ -5,18 +5,65 @@ import cors from 'cors';
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: ["http://localhost:3004", "http://127.0.0.1:3004"],
-        methods: ["GET", "POST"],
-        credentials: true
+
+// Configuração CORS mais permissiva para desenvolvimento e produção
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Permitir requests sem origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+
+        // Lista de origens permitidas
+        const allowedOrigins = [
+            'http://localhost:3004',
+            'http://127.0.0.1:3004',
+            'http://localhost:5173', // Vite dev server
+            'http://127.0.0.1:5173'
+        ];
+
+        // Permitir qualquer subdomínio .vercel.app
+        if (origin.includes('.vercel.app') || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        callback(null, true); // Para desenvolvimento, permitir tudo
     },
-    allowEIO3: true
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+const io = new Server(server, {
+    cors: corsOptions,
+    allowEIO3: true,
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.static('.'));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        rooms: gameRooms.size,
+        players: playerSockets.size
+    });
+});
+
+// Endpoint para listar salas (para debug)
+app.get('/api/rooms', (req, res) => {
+    const rooms = Array.from(gameRooms.entries()).map(([code, room]) => ({
+        code,
+        players: room.getPlayerCount(),
+        state: room.gameState,
+        round: room.currentRound
+    }));
+    res.json(rooms);
+});
 
 // Estado do servidor
 const gameRooms = new Map();
@@ -302,102 +349,138 @@ function generateRoomCode() {
 
 // Socket.io eventos
 io.on('connection', (socket) => {
-    console.log(`🔌 Jogador conectado: ${socket.id}`);
+    console.log(`🔌 Jogador conectado: ${socket.id} de ${socket.handshake.address}`);
+
+    // Timeout para conexões inativas
+    const connectionTimeout = setTimeout(() => {
+        console.log(`⏰ Timeout para socket ${socket.id}`);
+        socket.disconnect(true);
+    }, 300000); // 5 minutos
+
+    // Limpar timeout quando socket desconectar
+    socket.on('disconnect', () => {
+        clearTimeout(connectionTimeout);
+    });
 
     // Criar sala
     socket.on('create-room', (playerName) => {
-        const roomCode = generateRoomCode();
-        const room = new GameRoom(roomCode);
+        try {
+            if (!playerName || typeof playerName !== 'string' || playerName.trim().length === 0) {
+                socket.emit('error', { message: 'Nome do jogador inválido!' });
+                return;
+            }
 
-        gameRooms.set(roomCode, room);
-        playerSockets.set(socket.id, { roomCode, playerName });
+            const roomCode = generateRoomCode();
+            const room = new GameRoom(roomCode);
 
-        const player = room.addPlayer(socket.id, playerName);
-        socket.join(roomCode);
+            gameRooms.set(roomCode, room);
+            playerSockets.set(socket.id, { roomCode, playerName: playerName.trim() });
 
-        socket.emit('room-created', {
-            roomCode,
-            player,
-            roomInfo: room.getRoomInfo()
-        });
+            const player = room.addPlayer(socket.id, playerName.trim());
+            socket.join(roomCode);
 
-        console.log(`🏠 Sala criada: ${roomCode} por ${playerName}`);
+            socket.emit('room-created', {
+                roomCode,
+                player,
+                roomInfo: room.getRoomInfo()
+            });
+
+            console.log(`🏠 Sala criada: ${roomCode} por ${playerName.trim()}`);
+        } catch (error) {
+            console.error('❌ Erro ao criar sala:', error);
+            socket.emit('error', { message: 'Erro interno ao criar sala.' });
+        }
     });
 
     // Entrar em sala
     socket.on('join-room', (data) => {
-        const { roomCode, playerName } = data;
-
-        if (!roomCode || !playerName) {
-            socket.emit('error', { message: 'Dados inválidos para entrar na sala!' });
-            return;
-        }
-
-        const room = gameRooms.get(roomCode);
-
-        if (!room) {
-            console.log(`❌ Tentativa de entrar em sala inexistente: ${roomCode} por ${playerName}`);
-            socket.emit('error', { message: 'Sala não encontrada! A sala pode ter sido removida.' });
-            return;
-        }
-
-        console.log(`🔄 ${playerName} tentando entrar na sala ${roomCode} (estado: ${room.gameState})`);
-
-        // Se o jogo já está em andamento, permitir reconexão apenas para jogadores existentes
-        if (room.gameState === 'playing') {
-            const existingPlayer = Array.from(room.players.values()).find(p => p.name === playerName);
-            if (!existingPlayer) {
-                socket.emit('error', { message: 'Jogo já em andamento! Não é possível entrar agora.' });
+        try {
+            if (!data || typeof data !== 'object') {
+                socket.emit('error', { message: 'Dados inválidos!' });
                 return;
             }
-        }
 
-        // Verificar se o jogador já está na sala (reconexão)
-        const existingPlayer = Array.from(room.players.values()).find(p => p.name === playerName);
+            const { roomCode, playerName } = data;
 
-        if (existingPlayer) {
-            // Reconexão permitida mesmo durante o jogo
-            room.players.delete(existingPlayer.socketId);
-            existingPlayer.socketId = socket.id;
-            existingPlayer.connected = true;
-            room.players.set(socket.id, existingPlayer);
-            console.log(`🔄 ${playerName} reconectou à sala ${roomCode} (estado: ${room.gameState})`);
-
-            // Se o jogo está em andamento, enviar o round atual
-            if (room.gameState === 'playing' && room.currentLocation) {
-                console.log(`📍 Enviando round atual ${room.currentRound} para ${playerName} que reconectou`);
-                setTimeout(() => {
-                    socket.emit('round-started', {
-                        round: room.currentRound,
-                        location: room.currentLocation,
-                        timeLimit: room.roundDuration
-                    });
-                }, 1000);
+            if (!roomCode || !playerName ||
+                typeof roomCode !== 'string' || typeof playerName !== 'string' ||
+                roomCode.trim().length === 0 || playerName.trim().length === 0) {
+                socket.emit('error', { message: 'Código da sala e nome do jogador são obrigatórios!' });
+                return;
             }
-        } else if (room.gameState !== 'waiting') {
-            // Novo jogador não pode entrar se o jogo já começou
-            socket.emit('error', { message: 'Jogo já em andamento! Não é possível entrar agora.' });
-            return;
-        } else {
-            // Novo jogador
-            const player = room.addPlayer(socket.id, playerName);
-            console.log(`👥 ${playerName} entrou na sala ${roomCode}`);
+
+            const cleanRoomCode = roomCode.trim().toUpperCase();
+            const cleanPlayerName = playerName.trim();
+
+            const room = gameRooms.get(cleanRoomCode);
+
+            if (!room) {
+                console.log(`❌ Tentativa de entrar em sala inexistente: ${cleanRoomCode} por ${cleanPlayerName}`);
+                socket.emit('error', { message: 'Sala não encontrada! Verifique o código.' });
+                return;
+            }
+
+            console.log(`🔄 ${cleanPlayerName} tentando entrar na sala ${cleanRoomCode} (estado: ${room.gameState})`);
+
+            // Se o jogo já está em andamento, permitir reconexão apenas para jogadores existentes
+            if (room.gameState === 'playing') {
+                const existingPlayer = Array.from(room.players.values()).find(p => p.name === cleanPlayerName);
+                if (!existingPlayer) {
+                    socket.emit('error', { message: 'Jogo já em andamento! Não é possível entrar agora.' });
+                    return;
+                }
+            }
+
+            // Verificar se o jogador já está na sala (reconexão)
+            const existingPlayer = Array.from(room.players.values()).find(p => p.name === cleanPlayerName);
+
+            if (existingPlayer) {
+                // Reconexão permitida mesmo durante o jogo
+                room.players.delete(existingPlayer.socketId);
+                existingPlayer.socketId = socket.id;
+                existingPlayer.connected = true;
+                room.players.set(socket.id, existingPlayer);
+                console.log(`🔄 ${cleanPlayerName} reconectou à sala ${cleanRoomCode} (estado: ${room.gameState})`);
+
+                // Se o jogo está em andamento, enviar o round atual
+                if (room.gameState === 'playing' && room.currentLocation) {
+                    console.log(`📍 Enviando round atual ${room.currentRound} para ${cleanPlayerName} que reconectou`);
+                    setTimeout(() => {
+                        socket.emit('round-started', {
+                            round: room.currentRound,
+                            location: room.currentLocation,
+                            timeLimit: room.roundDuration
+                        });
+                    }, 1000);
+                }
+            } else if (room.gameState !== 'waiting') {
+                // Novo jogador não pode entrar se o jogo já começou
+                socket.emit('error', { message: 'Jogo já em andamento! Não é possível entrar agora.' });
+                return;
+            } else {
+                // Novo jogador
+                const player = room.addPlayer(socket.id, cleanPlayerName);
+                console.log(`👥 ${cleanPlayerName} entrou na sala ${cleanRoomCode}`);
+            }
+
+            playerSockets.set(socket.id, { roomCode: cleanRoomCode, playerName: cleanPlayerName });
+            socket.join(cleanRoomCode);
+
+            socket.emit('room-joined', {
+                roomCode: cleanRoomCode,
+                player: room.players.get(socket.id),
+                roomInfo: room.getRoomInfo()
+            });
+
+            // Notificar outros jogadores
+            socket.to(cleanRoomCode).emit('player-joined', {
+                player: room.players.get(socket.id),
+                roomInfo: room.getRoomInfo()
+            });
+        } catch (error) {
+            console.error('❌ Erro ao entrar na sala:', error);
+            socket.emit('error', { message: 'Erro interno ao entrar na sala.' });
         }
-
-        playerSockets.set(socket.id, { roomCode, playerName });
-        socket.join(roomCode);
-
-        socket.emit('room-joined', {
-            roomCode,
-            player: room.players.get(socket.id),
-            roomInfo: room.getRoomInfo()
-        });
-
-        // Notificar outros jogadores
-        socket.to(roomCode).emit('player-joined', {
-            player: room.players.get(socket.id),
-            roomInfo: room.getRoomInfo()
-        });
     });
 
     // Iniciar jogo

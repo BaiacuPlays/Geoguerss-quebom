@@ -9,7 +9,12 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server.js",
-    "start": "concurrently \"npm run server\" \"npm run dev\""
+    "start": "concurrently \"npm run server\" \"npm run dev\"",
+    "vercel-build": "npm run build",
+    "test:multiplayer": "node test-multiplayer.js",
+    "test:server": "node -e \"console.log('🧪 Testando servidor...'); fetch('http://localhost:3004').then(() => console.log('✅ Servidor OK')).catch(() => console.log('❌ Servidor offline'))\"",
+    "deploy": "node deploy.js",
+    "deploy:vercel": "vercel --prod"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.16.8",

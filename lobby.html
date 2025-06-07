@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌍 GeoGuessr Multiplayer - Lobby</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .lobby-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .lobby-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .lobby-title {
+            font-size: 3rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        .lobby-subtitle {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .lobby-section {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 2px solid #f0f0f0;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .input-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            border-color: #ccc;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(40, 167, 69, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .room-info {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .room-code {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 1rem;
+            letter-spacing: 0.2em;
+        }
+
+        .players-list {
+            margin-top: 1rem;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            border: 1px solid #e0e0e0;
+        }
+
+        .player-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .player-status {
+            font-size: 0.9rem;
+            color: #28a745;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #c3e6cb;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .flex-row .btn {
+            flex: 1;
+        }
+
+        @media (max-width: 768px) {
+            .lobby-container {
+                padding: 1rem;
+            }
+            
+            .lobby-title {
+                font-size: 2rem;
+            }
+            
+            .flex-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Status de Conexão -->
+    <div id="connectionStatus" class="connection-status status-disconnected">
+        🔴 Desconectado
+    </div>
+
+    <div class="lobby-container">
+        <!-- Header -->
+        <div class="lobby-header">
+            <h1 class="lobby-title">🌍 GeoGuessr Multiplayer</h1>
+            <p class="lobby-subtitle">Jogue com seus amigos e descubra quem conhece melhor o mundo!</p>
+        </div>
+
+        <!-- Tela de Nome -->
+        <div id="nameScreen" class="lobby-section">
+            <h2 class="section-title">👤 Bem-vindo!</h2>
+            
+            <div class="input-group">
+                <label class="input-label" for="playerName">Seu Nome:</label>
+                <input type="text" id="playerName" class="input-field" placeholder="Digite seu nome..." maxlength="20">
+            </div>
+            
+            <div class="flex-row">
+                <button id="createRoomBtn" class="btn btn-primary">🏠 Criar Nova Sala</button>
+                <button id="joinRoomBtn" class="btn btn-secondary">🚪 Entrar em Sala</button>
+            </div>
+        </div>
+
+        <!-- Tela de Entrar em Sala -->
+        <div id="joinScreen" class="lobby-section hidden">
+            <h2 class="section-title">🚪 Entrar em Sala</h2>
+            
+            <div class="input-group">
+                <label class="input-label" for="roomCode">Código da Sala:</label>
+                <input type="text" id="roomCode" class="input-field" placeholder="Digite o código..." maxlength="6" style="text-transform: uppercase;">
+            </div>
+            
+            <div class="flex-row">
+                <button id="joinRoomConfirmBtn" class="btn btn-primary">🎮 Entrar</button>
+                <button id="backToNameBtn" class="btn btn-secondary">⬅️ Voltar</button>
+            </div>
+        </div>
+
+        <!-- Tela da Sala -->
+        <div id="roomScreen" class="lobby-section hidden">
+            <h2 class="section-title">🏠 Sala de Jogo</h2>
+            
+            <div class="room-info">
+                <div class="room-code" id="displayRoomCode">ABC123</div>
+                <p style="text-align: center; color: #666; margin: 0;">
+                    Compartilhe este código com seus amigos!
+                </p>
+            </div>
+
+            <div class="players-list">
+                <h3 style="margin-bottom: 1rem; color: #333;">👥 Jogadores na Sala:</h3>
+                <div id="playersList">
+                    <!-- Jogadores serão adicionados dinamicamente -->
+                </div>
+            </div>
+
+            <div class="flex-row">
+                <button id="startGameBtn" class="btn btn-success" disabled>🎮 Iniciar Jogo</button>
+                <button id="leaveRoomBtn" class="btn btn-secondary">🚪 Sair da Sala</button>
+            </div>
+        </div>
+
+        <!-- Mensagens -->
+        <div id="errorMessage" class="error-message hidden"></div>
+        <div id="successMessage" class="success-message hidden"></div>
+
+        <!-- Link para Single Player -->
+        <div style="text-align: center; margin-top: 2rem;">
+            <a href="index.html" class="btn btn-secondary">🎯 Jogar Solo</a>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="lobby.js"></script>
+</body>
+</html>

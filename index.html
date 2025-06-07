@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌍 GeoGuessr - Explore o Mundo!</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Maps API será carregado dinamicamente -->
+</head>
+<body>
+    <!-- Tela Inicial -->
+    <div id="startScreen" class="screen">
+        <div class="start-container">
+            <h1 class="title">🌍 GeoGuessr</h1>
+            <p class="subtitle">Descubra onde você está no mundo!</p>
+
+            <div class="instructions">
+                <h3>🎯 Como Jogar</h3>
+                <div class="instruction-grid">
+                    <div class="instruction-card">
+                        <div class="icon">👀</div>
+                        <div>Observe a imagem</div>
+                    </div>
+                    <div class="instruction-card">
+                        <div class="icon">🗺️</div>
+                        <div>Clique no mapa</div>
+                    </div>
+                    <div class="instruction-card">
+                        <div class="icon">🎯</div>
+                        <div>Ganhe pontos</div>
+                    </div>
+                    <div class="instruction-card">
+                        <div class="icon">🏆</div>
+                        <div>5 rounds</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status da API -->
+            <div class="api-status" id="apiStatus">
+                <span id="currentMode">🌍 Carregando...</span>
+            </div>
+
+            <div class="game-modes">
+                <button id="startBtn" class="start-btn">🎮 Jogar Solo</button>
+                <button id="multiplayerBtn" class="multiplayer-btn">👥 Multiplayer</button>
+            </div>
+            <p class="tip">💡 Funciona perfeitamente sem configuração!</p>
+        </div>
+    </div>
+
+    <!-- Tela do Jogo -->
+    <div id="gameScreen" class="screen hidden">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1>🌍 GeoGuessr</h1>
+                    <div class="round-info">Round <span id="currentRound">1</span>/5</div>
+                </div>
+                <div class="header-right">
+                    <div class="score-label">Pontuação Total</div>
+                    <div class="total-score" id="totalScore">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="loading-content">
+                <div class="spinner">
+                    <div class="spinner-inner">🌍</div>
+                </div>
+                <h3 id="loadingTitle">Preparando sua aventura...</h3>
+                <p id="loadingText">Procurando local aleatório com Street View real</p>
+            </div>
+        </div>
+
+        <!-- Área do Jogo -->
+        <div id="gameArea" class="game-area hidden">
+            <!-- Street View em tela cheia -->
+            <div id="streetView" class="streetview-fullscreen"></div>
+
+            <!-- Controles do Street View -->
+            <div class="streetview-controls" id="streetviewControls">
+                <!-- Bússola -->
+                <div class="compass" id="compass" title="Bússola - Direção atual">
+                    <div class="compass-needle" id="compassNeedle"></div>
+                    <div class="compass-text north">N</div>
+                    <div class="compass-text east">E</div>
+                    <div class="compass-text south">S</div>
+                    <div class="compass-text west">W</div>
+                </div>
+
+                <!-- Botão de checkpoint -->
+                <button class="control-btn checkpoint-btn" id="checkpointBtn" title="Criar checkpoint"></button>
+
+                <!-- Botão de voltar ao início -->
+                <button class="control-btn home-btn" id="resetPositionBtn" title="Voltar ao início"></button>
+
+                <!-- Controles de Zoom do Street View -->
+                <button class="control-btn zoom-btn" id="zoomInBtn" title="Zoom In no Street View">+</button>
+                <button class="control-btn zoom-btn" id="zoomOutBtn" title="Zoom Out no Street View">−</button>
+
+                <!-- Botão de pessoa (placeholder para futuras funcionalidades) -->
+                <button class="control-btn person-btn" id="personBtn" title="Opções do jogador">👤</button>
+
+                <!-- Botão de ocultar interface -->
+                <button class="control-btn" id="hideUIBtn" title="Ocultar/Mostrar interface">👁️</button>
+            </div>
+
+            <!-- Mapa de palpite flutuante -->
+            <div id="guessMapContainer" class="guess-map-container">
+                <div id="map" class="guess-map"></div>
+                <div class="guess-controls">
+                    <button id="pinMapBtn" class="pin-map-btn" title="Fixar/Desfixar mapa expandido">📌</button>
+                    <button id="submitBtn" class="confirm-guess-btn" disabled>CONFIRMAR</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela de Resultado -->
+    <div id="resultScreen" class="screen hidden">
+        <!-- Mapa de resultado ocupando toda a tela -->
+        <div id="resultMap" class="result-map"></div>
+
+        <!-- Painel lateral direito com informações -->
+        <div class="result-sidebar">
+            <!-- Header do round -->
+            <div class="result-header">
+                <div class="round-indicator">Round <span id="resultRound">1</span> / 5 finished</div>
+            </div>
+
+            <!-- Seção de resultados -->
+            <div class="result-section">
+                <h3>ROUND RESULTS</h3>
+
+                <!-- Pontuação principal -->
+                <div class="main-score">
+                    <div class="score-icon" id="resultEmoji">🎯</div>
+                    <div class="score-value" id="roundScore">0</div>
+                </div>
+
+                <!-- Detalhes -->
+                <div class="result-details">
+                    <div class="detail-row">
+                        <span class="detail-label">DISTANCE</span>
+                        <span class="detail-value" id="distance">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">DISTANCE SCORE</span>
+                        <span class="detail-value" id="distanceScore">0</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">COUNTRY SCORE</span>
+                        <span class="detail-value" id="countryScore">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção de pontuação total -->
+            <div class="total-section">
+                <h3>TOTAL SCORES</h3>
+                <div class="total-score" id="progressScore">0</div>
+            </div>
+
+            <!-- Botão continuar -->
+            <button id="nextBtn" class="continue-btn">CONTINUE</button>
+        </div>
+    </div>
+
+    <!-- Tela Final -->
+    <div id="finalScreen" class="screen hidden">
+        <div class="final-container">
+            <div class="final-emoji" id="finalEmoji">🏆</div>
+            <h1>Jogo Finalizado!</h1>
+            <div class="performance-badge" id="performanceBadge">EXPERT</div>
+            <p class="performance-desc" id="performanceDesc">Você é um mestre da geografia!</p>
+
+            <div class="final-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-value" id="finalScore">15,000</div>
+                    <div class="stat-label">Pontuação Total</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="averageScore">3,000</div>
+                    <div class="stat-label">Média por Round</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🌍</div>
+                    <div class="stat-value">5</div>
+                    <div class="stat-label">Locais Explorados</div>
+                </div>
+            </div>
+
+            <button id="playAgainBtn" class="play-again-btn">🔄 Jogar Novamente</button>
+            <p class="challenge">Desafie seus amigos a superar sua pontuação!</p>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="multiplayer.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
